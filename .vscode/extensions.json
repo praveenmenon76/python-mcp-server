@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-toolsai.jupyter",
+    "esbenp.prettier-vscode",
+    "ms-vscode.cpptools",
+    "ms-vscode.csharp"
+  ]
+}

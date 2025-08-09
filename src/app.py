@@ -1,6 +1,11 @@
 from mcp_server.server import MCPServer
 import logging
 from flask import Flask, jsonify, render_template_string, request
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 

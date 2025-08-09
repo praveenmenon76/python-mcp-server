@@ -4,6 +4,10 @@ from pathlib import Path
 import json
 import logging
 from flask import Flask, request, jsonify, render_template, send_from_directory
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
