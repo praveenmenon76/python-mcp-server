@@ -1,0 +1,47 @@
+tools:
+  - name: WeatherTool
+    description: Get the current weather for a location
+    api_key: ${WEATHER_API_KEY}
+    class_path: mcp_server.tools.weather.WeatherTool
+    model:
+      fields:
+        - name: location
+          type: string
+          description: The city and state, e.g. San Francisco, CA
+          required: true
+    outputs:
+      - name: temperature
+        type: number
+        description: The current temperature in degrees Fahrenheit
+      - name: conditions
+        type: string
+        description: The current weather conditions
+
+  - name: StockPriceTool
+    description: Get the current stock price for a ticker symbol
+    class_path: mcp_server.tools.stock_price.StockPriceTool
+    model:
+      fields:
+        - name: symbol
+          type: string
+          description: The stock ticker symbol, e.g. AAPL
+          required: true
+    outputs:
+      - name: price
+        type: number
+        description: The current stock price in USD
+
+  - name: LlmTool
+    description: Use an LLM to answer a question
+    api_key: ${OPENAI_API_KEY}
+    class_path: mcp_server.tools.llm.LlmTool
+    model:
+      fields:
+        - name: question
+          type: string
+          description: The question to ask the LLM
+          required: true
+    outputs:
+      - name: answer
+        type: string
+        description: The answer from the LLM
