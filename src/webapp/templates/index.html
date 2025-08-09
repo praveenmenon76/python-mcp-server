@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Chat Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <h1>MCP Chat Interface</h1>
+            <div class="tools-section">
+                <h3>Available Tools:</h3>
+                <ul id="tools-list"></ul>
+            </div>
+        </div>
+        <div class="chat-window" id="chat-window">
+            <div class="message system">
+                <p>Welcome to the MCP Chat Interface! You can ask about:</p>
+                <ul>
+                    <li>Weather information (e.g., "What's the weather in New York?")</li>
+                    <li>Stock prices (e.g., "Get stock price for AAPL")</li>
+                </ul>
+                <p>Type 'help' to see available commands.</p>
+            </div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Type your message here...">
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

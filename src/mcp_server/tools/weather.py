@@ -2,6 +2,7 @@ import requests
 import logging
 import os
 import yaml
+import re
 from pathlib import Path
 from ..types.models import Tool
 
@@ -17,6 +18,15 @@ class WeatherTool:
         # Load API key from configuration instead of hardcoding
         self.api_key = self._load_api_key()
         self.base_url = "https://api.openweathermap.org/data/2.5/weather"
+        # Common city name corrections
+        self.city_corrections = {
+            "newyork": "New York",
+            "nyc": "New York",
+            "sf": "San Francisco",
+            "la": "Los Angeles",
+            "vegas": "Las Vegas",
+            "dc": "Washington DC"
+        }
     
     def _load_api_key(self):
         """Load API key from environment variable or config file"""
@@ -47,6 +57,32 @@ class WeatherTool:
         # If all else fails, return None (API calls will fail)
         return None
     
+    def _preprocess_location(self, location):
+        """Preprocess location string to handle common city name formats"""
+        if not location:
+            return location
+            
+        # Convert to lowercase for comparison and remove extra spaces
+        processed = location.strip().lower()
+        
+        # Check for common city name corrections
+        if processed in self.city_corrections:
+            return self.city_corrections[processed]
+            
+        # Fix concatenated city names (like "newyork" -> "New York")
+        for wrong, correct in self.city_corrections.items():
+            if processed == wrong.replace(" ", ""):
+                return correct
+        
+        # Properly capitalize city names
+        # This handles "new york" -> "New York"
+        words = processed.split()
+        if len(words) > 1:
+            return " ".join(word.capitalize() for word in words)
+            
+        # Default to capitalizing first letter for single-word cities
+        return location.strip().capitalize()
+    
     def get_weather(self, location, units="metric"):
         """
         Get current weather for a location.
@@ -60,33 +96,45 @@ class WeatherTool:
         """
         if not self.api_key:
             return {"status": "error", "message": "API key not configured. Please set OPENWEATHERMAP_API_KEY environment variable."}
+        
+        # Preprocess the location to handle common formats    
+        processed_location = self._preprocess_location(location)
+        logger.info(f"Looking up weather for: {processed_location} (original: {location})")
             
         try:
             params = {
-                "q": location,
+                "q": processed_location,
                 "appid": self.api_key,
                 "units": units
             }
             
             response = requests.get(self.base_url, params=params)
+            
+            if response.status_code == 404:
+                # City not found - provide a helpful message
+                logger.warning(f"City not found: {processed_location}")
+                return {
+                    "status": "error", 
+                    "message": f"Could not find weather data for '{location}'. Please check the spelling or try a different city."
+                }
+                
+            # For other errors, raise_for_status will trigger the exception handler
             response.raise_for_status()
             
             data = response.json()
             
-            if response.status_code == 200:
-                # Format the response for easier consumption
-                result = {
-                    "location": f"{data['name']}, {data['sys']['country']}",
-                    "description": data['weather'][0]['description'],
-                    "temperature": f"{data['main']['temp']}°{'C' if units == 'metric' else 'F'}",
-                    "feels_like": f"{data['main']['feels_like']}°{'C' if units == 'metric' else 'F'}",
-                    "humidity": f"{data['main']['humidity']}%",
-                    "wind": f"{data['wind']['speed']} {'m/s' if units == 'metric' else 'mph'}",
-                    "timestamp": data['dt']
-                }
-                return {"status": "success", "data": result}
-            else:
-                return {"status": "error", "message": "Failed to fetch weather data"}
+            # Format the response for easier consumption
+            result = {
+                "location": data['name'],
+                "country": data['sys']['country'],
+                "weather_description": data['weather'][0]['description'],
+                "temperature": data['main']['temp'],
+                "feels_like": data['main']['feels_like'],
+                "humidity": data['main']['humidity'],
+                "wind_speed": data['wind']['speed'],
+                "timestamp": data['dt']
+            }
+            return {"status": "success", "data": result}
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"Weather API request failed: {str(e)}")

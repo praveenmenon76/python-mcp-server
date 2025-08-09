@@ -1,0 +1,171 @@
+/* Main styles for the MCP Chat Interface */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    background-color: #f5f5f5;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.chat-container {
+    width: 800px;
+    height: 600px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    background-color: #4b7bec;
+    color: white;
+    border-radius: 10px 10px 0 0;
+}
+
+.header h1 {
+    margin-bottom: 10px;
+}
+
+.tools-section {
+    margin-top: 10px;
+    font-size: 0.9em;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.tools-section h3 {
+    margin-bottom: 5px;
+}
+
+#tools-list {
+    list-style-type: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+#tools-list li {
+    background-color: rgba(255, 255, 255, 0.2);
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.8em;
+}
+
+.chat-window {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.message {
+    max-width: 80%;
+    padding: 10px 15px;
+    border-radius: 10px;
+    line-height: 1.4;
+}
+
+.message p {
+    margin-bottom: 8px;
+}
+
+.message ul {
+    margin-left: 20px;
+    margin-bottom: 8px;
+}
+
+.user {
+    align-self: flex-end;
+    background-color: #4b7bec;
+    color: white;
+    border-bottom-right-radius: 0;
+}
+
+.bot {
+    align-self: flex-start;
+    background-color: #f1f2f6;
+    border-bottom-left-radius: 0;
+}
+
+.system {
+    align-self: center;
+    background-color: #f7f1e3;
+    width: 90%;
+    text-align: center;
+    border-radius: 5px;
+}
+
+.input-area {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 10px;
+}
+
+#user-input {
+    flex: 1;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    outline: none;
+    font-size: 1em;
+}
+
+#user-input:focus {
+    border-color: #4b7bec;
+}
+
+#send-button {
+    background-color: #4b7bec;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+#send-button:hover {
+    background-color: #3867d6;
+}
+
+/* Scrollbar styling */
+.chat-window::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-window::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.chat-window::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 10px;
+}
+
+.chat-window::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}
+
+/* For code blocks or structured data */
+pre {
+    white-space: pre-wrap;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 5px;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 0.9em;
+}

@@ -4,6 +4,8 @@ from pathlib import Path
 from .types.models import Tool
 import importlib
 from .tools.weather import WeatherTool
+from .tools.stock_price import StockPriceTool
+from .tools.llm import LLMTool
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,16 @@ class MCPServer:
             weather_tool = WeatherTool()
             self.register_tool(weather_tool.name, weather_tool)
             logger.info(f"Registered built-in tool: {weather_tool.name}")
+            
+            # Initialize StockPriceTool
+            stock_price_tool = StockPriceTool()
+            self.register_tool(stock_price_tool.name, stock_price_tool)
+            logger.info(f"Registered built-in tool: {stock_price_tool.name}")
+            
+            # Initialize LLMTool
+            llm_tool = LLMTool()
+            self.register_tool(llm_tool.name, llm_tool)
+            logger.info(f"Registered built-in tool: {llm_tool.name}")
         except Exception as e:
             logger.exception(f"Error initializing built-in tools: {e}")
 
