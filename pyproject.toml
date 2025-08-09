@@ -1,0 +1,23 @@
+[tool]
+name = "python-mcp-server"
+version = "0.1.0"
+description = "A Python MCP server with tool registration capabilities."
+authors = ["Your Name <youremail@example.com>"]
+license = "MIT"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+flask = "^2.0"
+pyyaml = "^5.4"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2"
+black = "^21.7b0"
+isort = "^5.9"
+
+[tool.poetry.scripts]
+mcp-server = "app:main"

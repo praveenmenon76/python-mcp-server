@@ -1,0 +1,19 @@
+{
+  "folders": [
+    {
+      "path": "src"
+    },
+    {
+      "path": "tests"
+    },
+    {
+      "path": ".vscode"
+    }
+  ],
+  "settings": {
+    "python.pythonPath": "path/to/your/python",
+    "python.autoComplete.extraPaths": [
+      "./src"
+    ]
+  }
+}
