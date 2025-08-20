@@ -1,8 +1,10 @@
-from mcp_server.server import MCPServer
 import logging
-from flask import Flask, jsonify, render_template_string, request
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+from flask import Flask, jsonify, render_template_string, request
+
+from mcp_server.server import MCPServer
 
 # Load environment variables from .env file
 load_dotenv()
@@ -107,9 +109,11 @@ INDEX_HTML = """
 </html>
 """
 
+
 @app.route("/")
 def index():
     return render_template_string(INDEX_HTML)
+
 
 @app.route("/api/tools")
 def api_tools():
@@ -119,35 +123,39 @@ def api_tools():
         for name in names:
             meta = server.get_tool(name)
             if meta is not None:
-                tools_list.append({
-                    "name": getattr(meta, "name", name),
-                    "description": getattr(meta, "description", ""),
-                    "version": getattr(meta, "version", "")
-                })
+                tools_list.append(
+                    {
+                        "name": getattr(meta, "name", name),
+                        "description": getattr(meta, "description", ""),
+                        "version": getattr(meta, "version", ""),
+                    }
+                )
             else:
                 tools_list.append({"name": name})
     except Exception as e:
         logging.exception("Failed to list tools: %s", e)
     return jsonify({"tools": tools_list})
 
+
 @app.route("/api/weather")
 def api_weather():
     location = request.args.get("location")
     units = request.args.get("units", "metric")
-    
+
     if not location:
         return jsonify({"status": "error", "message": "Location parameter is required"})
-    
+
     try:
         weather_tool = server.get_tool_instance("WeatherTool")
         if not weather_tool:
             return jsonify({"status": "error", "message": "Weather tool not available"})
-        
+
         result = weather_tool.get_weather(location, units)
         return jsonify(result)
     except Exception as e:
         logging.exception("Weather API error: %s", e)
         return jsonify({"status": "error", "message": str(e)})
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8000, debug=False)
