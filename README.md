@@ -3,6 +3,8 @@
 ## Overview
 The Python MCP Server is a modular server application designed to manage and register tools efficiently. It provides a framework for extending functionality through tool registration and retrieval.
 
+> **Note**: This is a dummy change for testing purposes.
+
 ## Features
 - Tool registration and management
 - Modular architecture for easy extension
