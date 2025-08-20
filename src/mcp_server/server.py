@@ -1,13 +1,15 @@
-from .tools.registry import ToolRegistry
+import importlib
 import logging
 from pathlib import Path
-from .types.models import Tool
-import importlib
-from .tools.weather import WeatherTool
-from .tools.stock_price import StockPriceTool
+
 from .tools.llm import LLMTool
+from .tools.registry import ToolRegistry
+from .tools.stock_price import StockPriceTool
+from .tools.weather import WeatherTool
+from .types.models import Tool
 
 logger = logging.getLogger(__name__)
+
 
 class MCPServer:
     def __init__(self):
@@ -15,7 +17,7 @@ class MCPServer:
         self.is_running = False
         # Initialize tools dictionary to store instances
         self.tool_instances = {}
-    
+
     def start(self):
         logger.info("Starting MCP Server...")
         self.is_running = True
@@ -33,7 +35,7 @@ class MCPServer:
         if tool_instance:
             self.tool_instances[name] = tool_instance
             # If the tool has an as_tool_model method, use it for metadata
-            if hasattr(tool_instance, 'as_tool_model'):
+            if hasattr(tool_instance, "as_tool_model"):
                 tool_model = tool_instance.as_tool_model()
                 self.tools_registry.register_tool(name, tool_model)
             else:
@@ -51,11 +53,11 @@ class MCPServer:
 
     def get_tool(self, tool_name):
         return self.tools_registry.get_tool(tool_name)
-    
+
     def get_tool_instance(self, tool_name):
         """Get the actual tool instance with functionality"""
         return self.tool_instances.get(tool_name)
-    
+
     def _initialize_built_in_tools(self):
         """Initialize and register built-in tools"""
         try:
@@ -63,12 +65,12 @@ class MCPServer:
             weather_tool = WeatherTool()
             self.register_tool(weather_tool.name, weather_tool)
             logger.info(f"Registered built-in tool: {weather_tool.name}")
-            
+
             # Initialize StockPriceTool
             stock_price_tool = StockPriceTool()
             self.register_tool(stock_price_tool.name, stock_price_tool)
             logger.info(f"Registered built-in tool: {stock_price_tool.name}")
-            
+
             # Initialize LLMTool
             llm_tool = LLMTool()
             self.register_tool(llm_tool.name, llm_tool)
@@ -98,7 +100,7 @@ class MCPServer:
                 tool_obj = Tool(
                     name=name,
                     description=t.get("description", ""),
-                    version=t.get("version", "")
+                    version=t.get("version", ""),
                 )
                 # Register tool name and metadata object
                 try:
@@ -108,6 +110,7 @@ class MCPServer:
                     logger.debug("Tool already registered, skipping: %s", name)
         except Exception as e:
             logger.exception("Failed to load tools from config: %s", e)
+
 
 if __name__ == "__main__":
     server = MCPServer()
