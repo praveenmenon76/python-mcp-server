@@ -157,5 +157,85 @@ def api_weather():
         return jsonify({"status": "error", "message": str(e)})
 
 
+@app.route("/api/execute", methods=["POST"])
+def api_execute_tool():
+    """Execute a specific tool with the provided parameters."""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"status": "error", "message": "No JSON data provided"}), 400
+            
+        tool_name = data.get("tool")
+        params = data.get("params", {})
+        
+        if not tool_name:
+            return jsonify({"status": "error", "message": "Tool name is required"}), 400
+            
+        # Get the tool instance
+        tool_instance = server.get_tool_instance(tool_name)
+        if not tool_instance:
+            return jsonify({"status": "error", "message": f"Tool '{tool_name}' not found"}), 404
+            
+        # Execute the appropriate method based on the tool
+        if tool_name == "WeatherTool":
+            location = params.get("location")
+            units = params.get("units", "metric")
+            if not location:
+                return jsonify({"status": "error", "message": "Location parameter is required"}), 400
+            result = tool_instance.get_weather(location, units)
+            
+        elif tool_name == "StockPriceTool":
+            ticker = params.get("ticker")
+            if not ticker:
+                return jsonify({"status": "error", "message": "Ticker parameter is required"}), 400
+            result = tool_instance.get_stock_price(ticker)
+            
+        elif tool_name == "LLMTool":
+            query = params.get("query")
+            context = params.get("context")
+            if not query:
+                return jsonify({"status": "error", "message": "Query parameter is required"}), 400
+            result = tool_instance.process_query(query, context)
+            
+        else:
+            # For future tools, try a generic execute method if available
+            if hasattr(tool_instance, "execute"):
+                result = tool_instance.execute(**params)
+            else:
+                return jsonify({
+                    "status": "error", 
+                    "message": f"Don't know how to execute tool '{tool_name}'"
+                }), 400
+                
+        return jsonify(result)
+        
+    except Exception as e:
+        logging.exception(f"Error executing tool: {str(e)}")
+        return jsonify({"status": "error", "message": f"Error executing tool: {str(e)}"}), 500
+
+@app.route("/api/health")
+def api_health():
+    """Check the health status of the MCP server."""
+    try:
+        tools_list = []
+        names = server.get_registered_tools()
+        for name in names:
+            meta = server.get_tool(name)
+            if meta is not None:
+                tools_list.append({
+                    "name": getattr(meta, "name", name),
+                    "status": "available"
+                })
+                
+        return jsonify({
+            "status": "healthy",
+            "tools": tools_list,
+            "server_running": server.is_running
+        })
+    except Exception as e:
+        logging.exception(f"Health check error: {str(e)}")
+        return jsonify({"status": "unhealthy", "message": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8000, debug=False)
