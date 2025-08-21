@@ -185,10 +185,11 @@ def api_execute_tool():
             result = tool_instance.get_weather(location, units)
             
         elif tool_name == "StockPriceTool":
-            ticker = params.get("ticker")
-            if not ticker:
-                return jsonify({"status": "error", "message": "Ticker parameter is required"}), 400
-            result = tool_instance.get_stock_price(ticker)
+            # Accept either "ticker" or "symbol" parameter for compatibility
+            symbol = params.get("symbol") or params.get("ticker")
+            if not symbol:
+                return jsonify({"status": "error", "message": "Symbol parameter is required"}), 400
+            result = tool_instance.get_stock_price(symbol)
             
         elif tool_name == "LLMTool":
             query = params.get("query")
