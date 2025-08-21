@@ -133,28 +133,31 @@ class AgentService:
     
     def _basic_intent_matching(self, query: str) -> Dict[str, Any]:
         """
-        Simple rule-based intent matching as fallback when LLM is unavailable.
+        Basic rule-based intent matching based on keywords in the query.
         
         Args:
             query (str): The user's query
             
         Returns:
-            Dict[str, Any]: The determined intent
+            Dict[str, Any]: Information about the detected intent
         """
         query = query.lower()
         
-        # Very basic keyword matching
-        if any(word in query for word in ["weather", "temperature", "forecast", "rain", "sunny"]):
+        # Weather intent
+        if any(word in query for word in ["weather", "temperature", "forecast", "rain", "sunny", "cloudy"]):
             # Extract location - very simple implementation
-            location = "New York"  # Default
+            location = None
             words = query.split()
             for i, word in enumerate(words):
                 if word in ["in", "at", "for"] and i + 1 < len(words):
                     location = words[i + 1]
-                    # Handle multi-word locations (very basic)
-                    if i + 2 < len(words) and words[i + 2] not in ["today", "tomorrow", "weather"]:
+                    # Check if the next word is also part of the location (e.g., "New York")
+                    if i + 2 < len(words) and words[i + 2] not in ["and", "or", "but", ".", "?", "!"]:
                         location += " " + words[i + 2]
                     break
+            
+            # Default location if none found
+            location = location or "London"
             
             return {
                 "status": "success",
@@ -189,7 +192,7 @@ class AgentService:
                 "status": "success",
                 "data": {
                     "tool": "StockPriceTool",
-                    "params": {"ticker": ticker},
+                    "params": {"symbol": ticker},  # Changed from "ticker" to "symbol"
                     "confidence": 0.7,
                     "explanation": "Basic keyword matching found stock-related terms"
                 }
