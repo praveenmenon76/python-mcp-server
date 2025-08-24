@@ -21,22 +21,23 @@ current_dir = Path(__file__).resolve().parent
 src_dir = current_dir.parent  # This points to the src directory
 sys.path.append(str(src_dir))  # Add src to the Python path
 
+# Import the client and agent
+from client import MCPClient
 from mcp_server.agent import IntentAgent
 
-# Now import from the correct path
+# Get the LLM tool from the server for agent's use
 from mcp_server.server import MCPServer
+temp_server = MCPServer()
+temp_server.start()
+llm_tool = temp_server.get_tool_instance("LLMTool")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
-# Initialize the MCP server and agent
-mcp_server = MCPServer()
-mcp_server.start()
+# Initialize the MCP client
+mcp_client = MCPClient(server_url="http://localhost:8000/api/jsonrpc")
 
-# Get the LLM tool instance
-llm_tool = mcp_server.get_tool_instance("LLMTool")
-
-# Initialize the agent with the MCP server and LLM tool
-agent = IntentAgent(mcp_server=mcp_server, llm_tool=llm_tool)
+# Initialize the agent with the MCP client and LLM tool
+agent = IntentAgent(mcp_client=mcp_client, llm_tool=llm_tool)
 
 
 @app.route("/")

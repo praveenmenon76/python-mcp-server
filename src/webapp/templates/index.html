@@ -3,31 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Chat Interface</title>
+    <title>MCP Chat</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="chat-container">
         <div class="header">
-            <h1>MCP Chat Interface</h1>
-            <div class="tools-section">
-                <h3>Available Tools:</h3>
-                <ul id="tools-list"></ul>
-            </div>
+            <h1>MCP Chat</h1>
         </div>
         <div class="chat-window" id="chat-window">
-            <div class="message system">
-                <p>Welcome to the MCP Chat Interface! You can ask about:</p>
+            <div class="message bot">
+                <p>Hi there! I'm your MCP assistant. How can I help you today?</p>
+                <p>You can ask me about:</p>
                 <ul>
-                    <li>Weather information (e.g., "What's the weather in New York?")</li>
-                    <li>Stock prices (e.g., "Get stock price for AAPL")</li>
+                    <li>Weather information (e.g., "What's the weather in Tokyo?")</li>
+                    <li>Stock prices (e.g., "Get the stock price for MSFT")</li>
                 </ul>
-                <p>Type 'help' to see available commands.</p>
+                <p>Type 'help' to see all available tools.</p>
             </div>
         </div>
         <div class="input-area">
-            <input type="text" id="user-input" placeholder="Type your message here...">
-            <button id="send-button">Send</button>
+            <textarea id="user-input" placeholder="Type your message here..." rows="1"></textarea>
+            <button id="send-button">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
         </div>
     </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>

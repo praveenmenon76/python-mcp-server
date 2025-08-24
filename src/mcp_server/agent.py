@@ -11,45 +11,41 @@ class IntentAgent:
     Acts as an intermediary between the chatbot interface and the MCP server tools.
     """
 
-    def __init__(self, mcp_server=None, llm_tool=None):
+    def __init__(self, mcp_client=None, llm_tool=None):
         """
         Initialize the Intent Agent.
 
         Args:
-            mcp_server: The MCP Server instance to use for tool execution
+            mcp_client: The MCP Client instance to use for tool execution
             llm_tool: The LLM Tool to use for intent recognition (optional)
         """
-        self.mcp_server = mcp_server
+        # Store the client directly, don't try to create a new one to avoid circular imports
+        self.mcp_client = mcp_client
         self.llm_tool = llm_tool
         self.conversation_history = []
         self.use_enhanced_responses = True  # Flag to enable/disable enhanced responses
 
-    def set_mcp_server(self, mcp_server):
-        """Set the MCP server instance for this agent"""
-        self.mcp_server = mcp_server
+    def set_mcp_client(self, mcp_client):
+        """Set the MCP client instance for this agent"""
+        self.mcp_client = mcp_client
 
     def set_llm_tool(self, llm_tool):
         """Set the LLM tool for this agent"""
         self.llm_tool = llm_tool
 
     def get_available_tools(self) -> List[Dict[str, str]]:
-        """Get information about all available tools from the MCP server"""
-        if not self.mcp_server:
-            logger.error("MCP Server not initialized")
+        """Get information about all available tools from the MCP server through the client"""
+        if not self.mcp_client:
+            logger.error("MCP Client not initialized")
             return []
 
-        tools_info = []
-        tool_names = self.mcp_server.get_registered_tools()
-
-        for name in tool_names:
-            tool = self.mcp_server.get_tool(name)
-            if tool and hasattr(tool, "description"):
-                tools_info.append({"name": name, "description": tool.description})
-            else:
-                tools_info.append(
-                    {"name": name, "description": "No description available"}
-                )
-
+        # Use the client to get tools from the server
+        tools_info = self.mcp_client.get_tools()
+        
+        # If no tools were found, return an empty list
+        if not tools_info:
+            return []
+            
         return tools_info
 
     def process_query(
@@ -65,8 +61,8 @@ class IntentAgent:
         Returns:
             Dict with response information
         """
-        if not self.mcp_server:
-            return {"status": "error", "message": "MCP Server not initialized"}
+        if not self.mcp_client:
+            return {"status": "error", "message": "MCP Client not initialized"}
 
         # Add query to conversation history
         self.conversation_history.append({"role": "user", "content": query})
@@ -249,7 +245,7 @@ class IntentAgent:
 
     def _execute_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute a tool with the given parameters.
+        Execute a tool with the given parameters using the MCP client.
 
         Args:
             tool_name: Name of the tool to execute
@@ -259,103 +255,88 @@ class IntentAgent:
             Dict with the tool execution result
         """
         if tool_name == "unknown":
+            # If we have an LLM available, use it to generate a helpful response
+            # even when the query doesn't match any specific tool
+            if self.llm_tool and self.llm_tool.api_key:
+                try:
+                    # Prepare a context for the LLM
+                    context = {
+                        "query": params.get("query", "Unknown query"),
+                        "available_tools": [tool["name"] for tool in self.get_available_tools()]
+                    }
+                    
+                    # Create a prompt for a general response
+                    prompt = (
+                        "The user has asked a question that doesn't match any of our specific tools. "
+                        "Please provide a helpful response that explains what kinds of questions I can answer. "
+                        "Be conversational and friendly. If you can partially answer their question with general knowledge, "
+                        "please do so, but make it clear what our limitations are."
+                    )
+                    
+                    # Get a response from the LLM
+                    llm_result = self.llm_tool.process_enhanced_response(prompt, context)
+                    
+                    if llm_result.get("status") == "success" and "message" in llm_result:
+                        return {
+                            "status": "success",
+                            "message": llm_result["message"],
+                            "data": {"query": params.get("query")},
+                            "tool": "general_response"
+                        }
+                    
+                except Exception as e:
+                    logger.error(f"Error generating general response: {str(e)}")
+            
+            # Fall back to the default message if LLM response fails or is unavailable
             return {
                 "status": "error",
                 "message": "I'm not sure how to help with that. Try asking about weather or stock prices.",
             }
 
-        # Get the tool instance from the MCP server
-        tool = self.mcp_server.get_tool_instance(tool_name)
-
-        if not tool:
-            return {
-                "status": "error",
-                "message": f"Sorry, {tool_name} is not available.",
-            }
-
-        # Store the raw tool data for enhanced processing
-        raw_data = None
-
-        # Execute the tool based on its type
-        if tool_name == "WeatherTool":
-            location = params.get("location")
-            if not location:
-                return {
-                    "status": "error",
-                    "message": "Please specify a location for the weather. For example: 'What's the weather in London?'",
-                }
-
-            logger.info(f"Executing WeatherTool with location: {location}")
-            result = tool.get_weather(location)
-
-            # Store the raw data for enhanced processing
-            if result["status"] == "success":
-                raw_data = result["data"]
-
-                # This is the legacy formatted response that will be enhanced
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Weather in {raw_data['location']} ({raw_data['country']}):\n"
-                        f"Temperature: {raw_data['temperature']}°C\n"
-                        f"Feels like: {raw_data['feels_like']}°C\n"
-                        f"Condition: {raw_data['weather_description']}\n"
-                        f"Humidity: {raw_data['humidity']}%\n"
-                        f"Wind speed: {raw_data['wind_speed']} m/s"
-                    ),
-                    "data": raw_data,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Error fetching weather: {result['message']}",
-                }
-
-        elif tool_name == "StockPriceTool":
-            symbol = params.get("symbol")
-            if not symbol:
-                return {
-                    "status": "error",
-                    "message": "Please specify a stock symbol. For example: 'Get stock price for AAPL'",
-                }
-
-            logger.info(f"Executing StockPriceTool with symbol: {symbol}")
-            result = tool.get_stock_price(symbol)
-
-            # Store the raw data for enhanced processing
-            if result["status"] == "success":
-                raw_data = result["data"]
-
-                # This is the legacy formatted response that will be enhanced
-                return {
-                    "status": "success",
-                    "message": (
-                        f"Stock information for {raw_data['symbol']}:\n"
-                        f"Current price: ${raw_data['price']}\n"
-                        f"Change: {raw_data['change']} ({raw_data['change_percent']})\n"
-                        f"Volume: {raw_data['volume']}\n"
-                        f"Day's range: ${raw_data['low']} - ${raw_data['high']}\n"
-                        f"Latest trading day: {raw_data['latest_trading_day']}"
-                    ),
-                    "data": raw_data,
-                }
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Error fetching stock data: {result['message']}",
-                }
-
-        # For any other tools, just return whatever the tool returned
-        try:
-            # Call the tool's execute method
-            result = self.mcp_server.execute_tool(tool_name, params)
+        # Use the client to execute the tool
+        result = self.mcp_client.execute_tool(tool_name, params)
+        
+        # Check if there was an error with the client
+        if result.get("status") == "error":
             return result
-        except Exception as e:
-            logger.error(f"Error executing tool {tool_name}: {str(e)}")
+            
+        # Process and format the response based on the tool type
+        if tool_name == "WeatherTool" and result.get("status") == "success":
+            raw_data = result.get("data", {})
+            
+            # Format the response for weather data
             return {
-                "status": "error",
-                "message": f"Error executing {tool_name}: {str(e)}",
+                "status": "success",
+                "message": (
+                    f"Weather in {raw_data.get('location', 'Unknown')} ({raw_data.get('country', '')}):\n"
+                    f"Temperature: {raw_data.get('temperature', 'N/A')}°C\n"
+                    f"Feels like: {raw_data.get('feels_like', 'N/A')}°C\n"
+                    f"Condition: {raw_data.get('weather_description', 'N/A')}\n"
+                    f"Humidity: {raw_data.get('humidity', 'N/A')}%\n"
+                    f"Wind speed: {raw_data.get('wind_speed', 'N/A')} m/s"
+                ),
+                "data": raw_data,
             }
+            
+        elif tool_name == "StockPriceTool" and result.get("status") == "success":
+            raw_data = result.get("data", {})
+            
+            # Format the response for stock price data
+            return {
+                "status": "success",
+                "message": (
+                    f"Stock information for {raw_data.get('symbol', 'Unknown')}:\n"
+                    f"Current price: ${raw_data.get('price', 'N/A')}\n"
+                    f"Change: {raw_data.get('change', 'N/A')} ({raw_data.get('change_percent', 'N/A')})\n"
+                    f"Volume: {raw_data.get('volume', 'N/A')}\n"
+                    f"Day's range: ${raw_data.get('low', 'N/A')} - ${raw_data.get('high', 'N/A')}\n"
+                    f"Latest trading day: {raw_data.get('latest_trading_day', 'N/A')}"
+                ),
+                "data": raw_data,
+            }
+            
+        # For any other tools, just return whatever the tool returned
+        return result
 
     def _generate_enhanced_response(
         self, query: str, tool_response: Dict[str, Any], tool_name: str

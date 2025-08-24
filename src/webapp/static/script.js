@@ -1,5 +1,4 @@
-// Script for the MCP Chat Interface
-
+// Modern chat interface script
 document.addEventListener('DOMContentLoaded', function() {
     const chatWindow = document.getElementById('chat-window');
     const userInput = document.getElementById('user-input');
@@ -9,16 +8,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load available tools
     fetchTools();
 
-    // Event listeners
-    sendButton.addEventListener('click', sendMessage);
-    userInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
-
     // Focus on input when page loads
     userInput.focus();
+
+    // Event listeners
+    sendButton.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', function(e) {
+        // Send on Enter (without Shift)
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+        
+        // Auto-resize textarea as user types
+        setTimeout(() => {
+            userInput.style.height = 'auto';
+            userInput.style.height = Math.min(userInput.scrollHeight, 100) + 'px';
+        }, 0);
+    });
 
     // Function to fetch available tools
     function fetchTools() {
@@ -46,8 +53,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add user message to chat
         addMessage(message, 'user');
         
-        // Clear input
+        // Clear input and reset height
         userInput.value = '';
+        userInput.style.height = 'auto';
         
         // Show loading indicator
         const loadingId = showLoading();
@@ -71,13 +79,16 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Scroll to bottom
             scrollToBottom();
+            
+            // Focus back on input
+            userInput.focus();
         })
         .catch(error => {
             // Remove loading indicator
             hideLoading(loadingId);
             
             console.error('Error:', error);
-            addMessage('An error occurred while processing your request.', 'system');
+            addMessage('Sorry, I encountered an error while processing your request.', 'system');
             
             // Scroll to bottom
             scrollToBottom();
@@ -89,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message', sender);
         
-        // Format text with line breaks
+        // Format text with line breaks and code
         const formattedText = formatMessage(text);
         messageDiv.innerHTML = formattedText;
         
@@ -101,6 +112,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function formatMessage(text) {
         // Replace newlines with <br>
         let formatted = text.replace(/\n/g, '<br>');
+        
+        // Handle code blocks with ```
+        formatted = formatted.replace(/```([^`]+)```/g, '<pre><code>$1</code></pre>');
+        
+        // Handle inline code with `
+        formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
         
         // Check if it contains a list-like structure and format it
         if (formatted.includes('- ')) {
@@ -144,33 +161,21 @@ document.addEventListener('DOMContentLoaded', function() {
     function showLoading() {
         const loadingDiv = document.createElement('div');
         loadingDiv.classList.add('message', 'bot', 'loading');
-        loadingDiv.innerHTML = 'Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
+        
+        // Create the dots for the loading animation
+        loadingDiv.innerHTML = 'Thinking<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
         
         chatWindow.appendChild(loadingDiv);
         scrollToBottom();
         
-        // Animate the dots
-        const dots = loadingDiv.querySelectorAll('.dot');
-        let i = 0;
-        
-        const intervalId = setInterval(() => {
-            dots.forEach((dot, index) => {
-                dot.style.opacity = index === i % 3 ? 1 : 0.3;
-            });
-            i++;
-        }, 300);
-        
-        // Return an object with references to remove the loading indicator later
-        return {
-            element: loadingDiv,
-            intervalId: intervalId
-        };
+        return loadingDiv;
     }
 
     // Function to hide loading indicator
-    function hideLoading(loading) {
-        clearInterval(loading.intervalId);
-        loading.element.remove();
+    function hideLoading(loadingElement) {
+        if (loadingElement && loadingElement.parentNode) {
+            loadingElement.remove();
+        }
     }
 
     // Function to scroll to the bottom of the chat

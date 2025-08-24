@@ -214,6 +214,42 @@ def api_execute_tool():
         logging.exception(f"Error executing tool: {str(e)}")
         return jsonify({"status": "error", "message": f"Error executing tool: {str(e)}"}), 500
 
+
+@app.route("/api/jsonrpc", methods=["POST"])
+def api_jsonrpc():
+    """JSON-RPC endpoint for the MCP server"""
+    try:
+        # Get the JSON-RPC request
+        request_data = request.json
+        
+        if not request_data:
+            return jsonify({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32700,
+                    "message": "Parse error: Invalid JSON was received"
+                },
+                "id": None
+            }), 400
+            
+        # Handle the JSON-RPC request
+        response = server.handle_jsonrpc(request_data)
+        
+        # Return the JSON-RPC response
+        return jsonify(response)
+        
+    except Exception as e:
+        logging.exception(f"Error handling JSON-RPC request: {str(e)}")
+        return jsonify({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32603,
+                "message": f"Internal error: {str(e)}"
+            },
+            "id": None
+        }), 500
+
+
 @app.route("/api/health")
 def api_health():
     """Check the health status of the MCP server."""
