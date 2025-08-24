@@ -67,13 +67,20 @@ class IntentAgent:
         # Add query to conversation history
         self.conversation_history.append({"role": "user", "content": query})
 
-        # Determine intent using LLM if available
-        intent_result = self._determine_intent(query, context)
+        # Determine intent(s) using LLM if available
+        intent_results = self._determine_intents(query, context)
 
-        # If intent determination failed, return the error
-        if intent_result["status"] == "error":
-            return intent_result
+        # If intent determination completely failed, return the error
+        if not intent_results or (len(intent_results) == 1 and intent_results[0]["status"] == "error"):
+            return intent_results[0] if intent_results else {"status": "error", "message": "Failed to determine intent"}
 
+        # Handle multiple intents if found
+        if len(intent_results) > 1:
+            return self._handle_multiple_intents(query, intent_results)
+            
+        # For single intent, proceed as before
+        intent_result = intent_results[0]
+        
         # Get the tool name and parameters from the intent result
         tool_name = intent_result["data"].get("tool")
         params = intent_result["data"].get("params", {})
@@ -107,25 +114,28 @@ class IntentAgent:
 
         return response
 
-    def _determine_intent(
+    def _determine_intents(
         self, query: str, context: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    ) -> List[Dict[str, Any]]:
         """
-        Determine the user's intent from their query.
+        Determine the user's intent(s) from their query. Can identify multiple intents.
 
         Args:
             query: The user's natural language query
             context: Optional context information
 
         Returns:
-            Dict with intent information (tool name and parameters)
+            List of dicts with intent information (tool name and parameters)
         """
+        # Check if the query might contain multiple intents
+        contains_multiple = self._might_contain_multiple_intents(query)
+        
         # If LLM tool is available, use it for intent recognition
         if self.llm_tool and self.llm_tool.api_key:
             # Get information about available tools
             tools_info = self.get_available_tools()
 
-            # Get recent conversation history for context (last 5 exchanges)
+            # Get recent conversation history for context
             recent_history = (
                 self.conversation_history[-10:]
                 if len(self.conversation_history) > 10
@@ -138,24 +148,232 @@ class IntentAgent:
 
             if recent_history:
                 context["conversation_history"] = recent_history
+                
+            # If we suspect multiple intents, try to handle them with a different approach
+            if contains_multiple:
+                multi_intent_results = self._detect_multiple_intents_with_llm(query, context, tools_info)
+                if multi_intent_results:
+                    return multi_intent_results
 
-            # Call the LLM to process the query
+            # Fall back to single intent recognition
             llm_result = self.llm_tool.process_query(
                 query, context=context, tools_info=tools_info
             )
 
             if llm_result["status"] == "success":
-                return llm_result
+                return [llm_result]
             else:
                 logger.warning(
                     f"LLM intent recognition failed: {llm_result['message']}"
                 )
                 # Fall back to rule-based intent recognition
 
-        # Rule-based intent recognition as fallback
+        # Rule-based intent recognition as fallback (now can return multiple intents)
         return self._rule_based_intent_recognition(query)
+        
+    def _might_contain_multiple_intents(self, query: str) -> bool:
+        """
+        Check if a query might contain multiple intents.
+        
+        Args:
+            query: The user's natural language query
+            
+        Returns:
+            Boolean indicating if the query might contain multiple intents
+        """
+        # Simple heuristics to detect multiple intents
+        indicators = ["and", "also", "plus", "both", "as well as", "&"]
+        query_lower = query.lower()
+        
+        # Check for intent-joining keywords
+        for indicator in indicators:
+            if f" {indicator} " in f" {query_lower} ":
+                return True
+                
+        # Check if the query contains both weather and stock keywords
+        weather_keywords = ["weather", "temperature", "forecast", "raining", "sunny"]
+        stock_keywords = ["stock", "price", "share", "ticker", "market", "trading"]
+        
+        has_weather = any(keyword in query_lower for keyword in weather_keywords)
+        has_stock = any(keyword in query_lower for keyword in stock_keywords)
+        
+        return has_weather and has_stock
+        
+    def _detect_multiple_intents_with_llm(
+        self, query: str, context: Dict[str, Any], tools_info: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Use the LLM to detect multiple intents in a query.
+        
+        Args:
+            query: The user's natural language query
+            context: Context information
+            tools_info: Information about available tools
+            
+        Returns:
+            List of intent results, or empty list if detection failed
+        """
+        try:
+            # Create a special prompt for multi-intent detection
+            system_prompt = (
+                "You are a helpful assistant that interprets user queries for an MCP (Model Context Protocol) server. "
+                "Your task is to identify if a query contains MULTIPLE intents and extract relevant parameters for each intent. "
+                "A query has multiple intents if it asks for different types of information that would require different tools."
+                "\n\nAvailable tools:"
+            )
+            
+            for tool in tools_info:
+                system_prompt += f"\n- {tool['name']}: {tool['description']}"
+            
+            system_prompt += (
+                "\n\nIf the query contains multiple intents, respond with a JSON array where each object contains:"
+                "\n- 'tool': The name of the tool to use"
+                "\n- 'params': A dictionary of parameters to pass to the tool"
+                "\n- 'confidence': A number between 0 and 1 indicating your confidence in this interpretation"
+                "\n- 'explanation': A brief explanation of your reasoning"
+                "\n\nFor example, if the query is 'What's the weather in New York and the stock price of Apple', "
+                "you should respond with an array containing two objects, one for WeatherTool with location=New York "
+                "and one for StockPriceTool with symbol=AAPL."
+                "\n\nIf you detect only one intent or are unsure, respond with an empty array []."
+            )
+            
+            user_prompt = f"User query: {query}\n\nDetect any multiple intents in this query and extract parameters for each intent."
+            
+            # Use the enhanced response processing for more flexible output
+            context_for_llm = {
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt
+            }
+            
+            llm_result = self.llm_tool.process_multi_intent_detection(context_for_llm)
+            
+            if llm_result.get("status") == "success" and llm_result.get("intents"):
+                intents = llm_result.get("intents", [])
+                
+                # Convert to the expected format
+                results = []
+                for intent in intents:
+                    results.append({
+                        "status": "success",
+                        "data": intent
+                    })
+                
+                if results:
+                    logger.info(f"Detected multiple intents: {len(results)}")
+                    return results
+                    
+        except Exception as e:
+            logger.error(f"Error detecting multiple intents: {str(e)}")
+            
+        return []
+        
+    def _handle_multiple_intents(
+        self, query: str, intent_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Handle multiple intents by executing each tool and combining the responses.
+        
+        Args:
+            query: The original user query
+            intent_results: List of intent detection results
+            
+        Returns:
+            Combined response for all intents
+        """
+        responses = []
+        combined_data = {}
+        
+        for intent in intent_results:
+            # Skip any error results
+            if intent["status"] != "success":
+                continue
+                
+            tool_name = intent["data"].get("tool")
+            params = intent["data"].get("params", {})
+            
+            # Execute the tool for this intent
+            tool_response = self._execute_tool(tool_name, params)
+            
+            # Store the response
+            responses.append({
+                "tool": tool_name,
+                "response": tool_response
+            })
+            
+            # Combine data for enhanced response
+            if tool_response.get("status") == "success" and "data" in tool_response:
+                combined_data[tool_name] = tool_response["data"]
+        
+        # If we couldn't process any intents successfully
+        if not responses:
+            return {
+                "status": "error",
+                "message": "Failed to process any of the detected intents"
+            }
+            
+        # Generate combined enhanced response if enabled
+        if self.use_enhanced_responses and self.llm_tool and self.llm_tool.api_key:
+            try:
+                context = {
+                    "user_query": query,
+                    "responses": responses,
+                    "combined_data": combined_data
+                }
+                
+                # Create a prompt for the LLM to generate a natural language response
+                enhanced_prompt = (
+                    "Generate a natural, conversational response to the user's query that combines all the information from multiple sources. "
+                    "The user asked a question with multiple parts, and we've gathered information for each part. "
+                    "Synthesize this information into a single, coherent response that addresses all parts of the user's query. "
+                    "The response should be helpful, concise, and in a friendly tone. "
+                    "Format the response in a way that clearly separates the different pieces of information while maintaining a natural flow."
+                )
+                
+                # Call the LLM to generate the enhanced response
+                llm_result = self.llm_tool.process_enhanced_response(
+                    enhanced_prompt, context
+                )
+                
+                if llm_result.get("status") == "success" and "message" in llm_result:
+                    # Return the enhanced response
+                    response = {
+                        "status": "success",
+                        "message": llm_result["message"],
+                        "data": combined_data,
+                        "multi_intent": True,
+                        "enhanced": True
+                    }
+                    
+                    # Add response to conversation history
+                    self.conversation_history.append({"role": "assistant", "content": response["message"]})
+                    
+                    return response
+                    
+            except Exception as e:
+                logger.error(f"Error generating combined response: {str(e)}")
+        
+        # Fallback to simple combined response
+        messages = []
+        for resp in responses:
+            tool_name = resp["tool"]
+            tool_response = resp["response"]
+            
+            if tool_response.get("status") == "success" and "message" in tool_response:
+                messages.append(f"[{tool_name}] {tool_response['message']}")
+                
+        combined_message = "\n\n".join(messages)
+        
+        # Add response to conversation history
+        self.conversation_history.append({"role": "assistant", "content": combined_message})
+        
+        return {
+            "status": "success",
+            "message": combined_message,
+            "data": combined_data,
+            "multi_intent": True
+        }
 
-    def _rule_based_intent_recognition(self, query: str) -> Dict[str, Any]:
+    def _rule_based_intent_recognition(self, query: str) -> List[Dict[str, Any]]:
         """
         Perform rule-based intent recognition (fallback method).
 
@@ -163,9 +381,10 @@ class IntentAgent:
             query: The user's natural language query
 
         Returns:
-            Dict with intent information (tool name and parameters)
+            List of dicts with intent information (tool name and parameters)
         """
         query_lower = query.lower()
+        intents = []
 
         # Weather intent patterns
         weather_keywords = ["weather", "temperature", "forecast", "raining", "sunny"]
@@ -186,7 +405,7 @@ class IntentAgent:
                     location = match.group(1).strip()
                     break
 
-            return {
+            intents.append({
                 "status": "success",
                 "data": {
                     "tool": "WeatherTool",
@@ -194,7 +413,7 @@ class IntentAgent:
                     "confidence": 0.7,
                     "explanation": "Rule-based intent recognition identified weather-related keywords",
                 },
-            }
+            })
 
         # Stock price intent patterns
         stock_keywords = ["stock", "price", "share", "ticker", "market", "trading"]
@@ -222,7 +441,7 @@ class IntentAgent:
                 if len(words) == 1 and words[0].isalpha():
                     symbol = words[0]
 
-            return {
+            intents.append({
                 "status": "success",
                 "data": {
                     "tool": "StockPriceTool",
@@ -230,18 +449,21 @@ class IntentAgent:
                     "confidence": 0.7,
                     "explanation": "Rule-based intent recognition identified stock-related keywords",
                 },
-            }
+            })
 
-        # Unknown intent
-        return {
-            "status": "success",
-            "data": {
-                "tool": "unknown",
-                "params": {},
-                "confidence": 0.0,
-                "explanation": "Could not determine intent from query",
-            },
-        }
+        # If no intents were identified, return unknown intent
+        if not intents:
+            intents.append({
+                "status": "success",
+                "data": {
+                    "tool": "unknown",
+                    "params": {},
+                    "confidence": 0.0,
+                    "explanation": "Could not determine intent from query",
+                },
+            })
+
+        return intents
 
     def _execute_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """

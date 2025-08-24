@@ -641,3 +641,171 @@ class LLMTool:
                 "status": "error",
                 "message": f"Error generating enhanced response: {str(e)}",
             }
+
+    def process_multi_intent_detection(self, context):
+        """
+        Process a query to detect multiple intents.
+        
+        Args:
+            context: A dictionary containing system_prompt and user_prompt
+            
+        Returns:
+            Dict with detected intents
+        """
+        if not self.enabled:
+            return {
+                "status": "error",
+                "message": "LLM Tool is disabled in configuration",
+            }
+
+        if not self.api_key:
+            return {"status": "error", "message": "LLM API key not configured"}
+            
+        system_prompt = context.get("system_prompt", "")
+        user_prompt = context.get("user_prompt", "")
+
+        try:
+            # Call the appropriate LLM API based on the provider
+            if self.provider == "openai":
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                }
+
+                data = {
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.3,  # Lower temperature for more precise extraction
+                }
+
+                response = requests.post(
+                    self.endpoints["openai"], headers=headers, json=data, timeout=30
+                )
+
+                if response.status_code != 200:
+                    logger.error(
+                        f"OpenAI API error: {response.status_code} - {response.text}"
+                    )
+                    return {
+                        "status": "error",
+                        "message": f"LLM API error: {response.status_code}",
+                    }
+
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                
+                # Try to parse the content as JSON array
+                try:
+                    # The LLM might return just the array or might wrap it in a JSON object
+                    # First, try to parse directly
+                    intents = json.loads(content)
+                    
+                    # If it's not an array but a JSON object with an array property, try to extract it
+                    if not isinstance(intents, list) and isinstance(intents, dict):
+                        # Look for a property that contains an array
+                        for key, value in intents.items():
+                            if isinstance(value, list):
+                                intents = value
+                                break
+                    
+                    # If we still don't have a list, or it's empty, return empty intents
+                    if not isinstance(intents, list) or len(intents) == 0:
+                        return {"status": "success", "intents": []}
+                        
+                    # Make sure each intent has the required fields
+                    for intent in intents:
+                        if not isinstance(intent, dict):
+                            continue
+                        if "tool" not in intent:
+                            continue
+                        if "params" not in intent:
+                            intent["params"] = {}
+                        if "confidence" not in intent:
+                            intent["confidence"] = 0.8
+                        if "explanation" not in intent:
+                            intent["explanation"] = f"Multiple intent detection identified {intent['tool']}"
+                    
+                    return {"status": "success", "intents": intents}
+                    
+                except json.JSONDecodeError:
+                    # If we can't parse as JSON, return empty intents
+                    logger.warning(f"LLM didn't return valid JSON for multi-intent detection: {content[:100]}...")
+                    return {"status": "success", "intents": []}
+
+            elif self.provider == "azure":
+                # Azure implementation similar to OpenAI
+                headers = {"Content-Type": "application/json", "api-key": self.api_key}
+
+                data = {
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0.3,
+                }
+
+                endpoint = self.endpoints["azure"]
+                if not endpoint.endswith("completions"):
+                    endpoint = f"{endpoint}/openai/deployments/{self.model}/chat/completions?api-version=2023-05-15"
+
+                response = requests.post(endpoint, headers=headers, json=data)
+
+                response.raise_for_status()
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                
+                try:
+                    intents = json.loads(content)
+                    if not isinstance(intents, list):
+                        return {"status": "success", "intents": []}
+                    return {"status": "success", "intents": intents}
+                except json.JSONDecodeError:
+                    return {"status": "success", "intents": []}
+
+            elif self.provider == "anthropic":
+                # Anthropic implementation
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": self.api_key,
+                    "anthropic-version": "2023-06-01",
+                }
+
+                data = {
+                    "model": self.model,
+                    "system": system_prompt,
+                    "messages": [{"role": "user", "content": user_prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 1024,
+                }
+
+                response = requests.post(
+                    self.endpoints["anthropic"], headers=headers, json=data
+                )
+
+                response.raise_for_status()
+                result = response.json()
+                content = result["content"][0]["text"]
+                
+                try:
+                    intents = json.loads(content)
+                    if not isinstance(intents, list):
+                        return {"status": "success", "intents": []}
+                    return {"status": "success", "intents": intents}
+                except json.JSONDecodeError:
+                    return {"status": "success", "intents": []}
+
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Unsupported LLM provider: {self.provider}",
+                }
+
+        except Exception as e:
+            logger.error(f"Error detecting multiple intents: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Error detecting multiple intents: {str(e)}",
+            }
